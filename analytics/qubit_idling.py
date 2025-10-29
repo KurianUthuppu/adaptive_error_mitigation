@@ -1,6 +1,7 @@
 # analytics/qubit_idling.py
 
 from qiskit import QuantumCircuit
+from qiskit.transpiler import Target
 from qiskit.converters import circuit_to_dag
 from qiskit.circuit import Delay, Qubit
 from typing import Dict, Any
@@ -138,4 +139,175 @@ def analyze_qubit_idling(
     return {
         "max_ratio_qubit": max_ratio_qubit_metrics,
         "overall_average": avg_metrics,
+    }
+
+def analyze_qubit_activity(circuit: QuantumCircuit, backend_target: Target):
+    """
+    Calculates sparsity (by layer and time) and gate distribution metrics
+    for each qubit in a single pass over the circuit's DAG.
+    
+    Filters results to *only* include qubits that were used.
+    
+    A qubit's "lifespan" starts on its first operation and ends
+    on its first measurement.
+    
+    Requires backend_target to get dt and gate durations.
+    
+    Returns:
+        A dictionary:
+        {
+          'sparsity_by_layer': Dict[int, float],
+          'sparsity_by_time': Dict[int, float],
+          'distribution_mean_dt': Dict[int, float],
+          'distribution_sd_dt': Dict[int, float]
+        }
+    
+    Distribution Metrics (Mean/SD):
+      - Mean/SD of the *time duration (dt)* of all idle blocks
+        (sequences of '0's) in the qubit's lifespan.
+      - Low Mean: Qubit is idle for short periods.
+      - Low SD: Qubit is idle for very consistent/regular periods.
+    """
+    n_qubits = circuit.num_qubits
+    if n_qubits == 0:
+        return {'sparsity_by_layer': {}, 'sparsity_by_time': {}, 
+                'distribution_mean_dt': {}, 'distribution_sd_dt': {}}
+
+    # --- 1. Single DAG Conversion ---
+    dag = circuit_to_dag(circuit)
+    total_layers = dag.depth()
+    
+    if total_layers == 0:
+        return {
+            'sparsity_by_layer': {}, 'sparsity_by_time': {},
+            'distribution_mean_dt': {}, 'distribution_sd_dt': {}
+        }
+
+    qubit_indices = {qubit: i for i, qubit in enumerate(circuit.qubits)}
+    # 'delay' is now handled separately, but it's still an idle instruction
+    IDLE_INSTRUCTIONS = {'barrier', 'delay'}
+
+    try:
+        inst_durations = backend_target.durations()
+    except Exception as e:
+        raise ValueError(f"Could not get durations from backend_target. Error: {e}")
+
+    # --- 2. Initialize all state variables ---
+    gate_count_layer = [0] * n_qubits
+    lifespan_count_layer = [0] * n_qubits
+    gate_duration_dt = [0.0] * n_qubits
+    lifespan_duration_dt = [0.0] * n_qubits
+    is_started = [False] * n_qubits
+    is_measured = [False] * n_qubits
+    current_idle_duration_dt = [0.0] * n_qubits
+    idle_block_lists = [[] for _ in range(n_qubits)]
+
+    # --- 3. Single Pass over all layers ---
+    for layer_index, layer in enumerate(dag.layers()):
+        gate_qubits_in_layer = set()
+        measured_qubits_in_layer = set()
+        max_duration_dt_this_layer = 0.0
+        
+        for op_node in layer['graph'].op_nodes():
+            op = op_node.op
+            q_indices = tuple(qubit_indices[q] for q in op_node.qargs)
+            
+            # --- FIX: Handle 'delay' and 'barrier' explicitly ---
+            op_duration = 0.0
+            if op.name == 'delay':
+                # Get duration from the instruction itself
+                if op.unit == 'dt':
+                    op_duration = op.duration
+                else:
+                    # Convert from seconds to dt
+                    op_duration = op.duration / backend_target.dt 
+            elif op.name == 'barrier':
+                op_duration = 0.0 # Barriers have zero duration
+            else:
+                # Only look up durations for actual gates
+                op_duration = inst_durations.get(op.name, q_indices, unit='dt')
+                if op_duration is None:
+                    # Handle non-backend ops (e.g., reset, initialize)
+                    op_duration = 0.0
+            # --- END FIX ---
+                
+            max_duration_dt_this_layer = max(max_duration_dt_this_layer, op_duration)
+
+            # --- (Rest of logic) ---
+            op_qubits = [qubit_indices[q] for q in op_node.qargs]
+            
+            if op_node.name == 'measure':
+                measured_qubits_in_layer.update(op_qubits)
+            elif op_node.name not in IDLE_INSTRUCTIONS:
+                gate_qubits_in_layer.update(op_qubits)
+        
+        started_qubits_in_layer = gate_qubits_in_layer.union(
+            measured_qubits_in_layer
+        )
+
+        for i in range(n_qubits):
+            if is_measured[i]:
+                continue
+            if not is_started[i]:
+                if i in started_qubits_in_layer:
+                    is_started[i] = True
+                else:
+                    continue
+            
+            lifespan_count_layer[i] += 1
+            lifespan_duration_dt[i] += max_duration_dt_this_layer
+            
+            if i in gate_qubits_in_layer:
+                gate_count_layer[i] += 1
+                gate_duration_dt[i] += max_duration_dt_this_layer
+                if current_idle_duration_dt[i] > 0:
+                    idle_block_lists[i].append(current_idle_duration_dt[i])
+                current_idle_duration_dt[i] = 0.0
+            else:
+                current_idle_duration_dt[i] += max_duration_dt_this_layer
+            
+            if i in measured_qubits_in_layer:
+                is_measured[i] = True
+                if current_idle_duration_dt[i] > 0:
+                    idle_block_lists[i].append(current_idle_duration_dt[i])
+                current_idle_duration_dt[i] = 0.0
+
+    # --- 4. Final Calculation ---
+    sparsity_layer_dict = {}
+    sparsity_time_dict = {}
+    distribution_mean_dict = {}
+    distribution_sd_dict = {}
+    
+    for i in range(n_qubits):
+        if not is_started[i]:
+            continue
+            
+        # Add any trailing idle block (if qubit was idle at the end)
+        if current_idle_duration_dt[i] > 0:
+             idle_block_lists[i].append(current_idle_duration_dt[i])
+
+        # --- Calculate Sparsity ---
+        sparsity_layer_dict[i] = 1.0 - (gate_count_layer[i] / lifespan_count_layer[i])
+        
+        # Check for zero duration lifespan (e.g., a circuit with only barriers)
+        if lifespan_duration_dt[i] == 0:
+             sparsity_time_dict[i] = 1.0 # 0 gates / 0 time = 1.0 sparse
+        else:
+             sparsity_time_dict[i] = 1.0 - (gate_duration_dt[i] / lifespan_duration_dt[i])
+        
+        # --- Calculate Distribution Metrics ---
+        idle_blocks = idle_block_lists[i]
+        
+        if not idle_blocks:
+            distribution_mean_dict[i] = 0.0 # No idle periods
+            distribution_sd_dict[i] = 0.0
+        else:
+            distribution_mean_dict[i] = round(np.mean(idle_blocks), 2)
+            distribution_sd_dict[i] = round(np.std(idle_blocks), 2)
+            
+    return {
+        'sparsity_by_layer': sparsity_layer_dict,
+        'sparsity_by_time': sparsity_time_dict,
+        'distribution_mean_dt': distribution_mean_dict,
+        'distribution_sd_dt': distribution_sd_dict
     }
