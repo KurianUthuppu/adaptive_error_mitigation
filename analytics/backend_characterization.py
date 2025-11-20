@@ -2,9 +2,55 @@
 
 from qiskit import QuantumCircuit
 from qiskit.providers import Backend
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Union
 import numpy as np
 from .layout_mapping import get_qubit_layout_mapping
+
+TrackedMetric = List[Tuple[float, Union[int, Tuple[int, int]]]]
+
+
+def get_worst_metric(tracked_list: TrackedMetric, find_max: bool) -> Tuple[float, Any]:
+    """
+    Finds the maximum or minimum value and its associated location (qubit/link)
+    from a list of (value, location) tuples.
+
+    Args:
+        tracked_list: List of (value, location) tuples.
+        find_max: True to find the maximum value, False to find the minimum.
+
+    Returns:
+        Tuple: (Worst_Value, Location_Index)
+    """
+    if not tracked_list:
+        return 0.0, None  # Return default if list is empty
+
+    # Extract values for NumPy's argmax/argmin
+    values = [item[0] for item in tracked_list]
+
+    if find_max:
+        idx = np.argmax(values)
+    else:
+        idx = np.argmin(values)
+
+    value, location = tracked_list[idx]
+    return float(value), location
+
+
+def get_average_metric(tracked_list: TrackedMetric) -> float:
+    """
+    Calculates the average value from a list of (value, location) tuples.
+
+    Args:
+        tracked_list: List of (value, location) tuples.
+
+    Returns:
+        float: The average of the values, or 0.0 if the list is empty.
+    """
+    if not tracked_list:
+        return 0.0
+
+    values = [item[0] for item in tracked_list]
+    return float(np.mean(values))
 
 
 def extract_backend_metrics(
@@ -56,13 +102,13 @@ def extract_backend_metrics(
     # B. PER-QUBIT METRICS (T1, T2, Readout Error, 1Q Gate Error)
     # ------------------------------------------------------------
     qubit_data: Dict[int, Dict[str, float]] = {}
-    readout_errors_list = []
-    one_q_errors_list = []
-    one_q_duration_list = []
-    t1_relaxation_list = []
-    t2_dephasing_list = []
-    p10_error_list = []
-    p01_error_list = []
+    readout_errors_list: TrackedMetric = []
+    one_q_errors_list: TrackedMetric = []
+    one_q_duration_list: TrackedMetric = []
+    t1_relaxation_list: TrackedMetric = []
+    t2_dephasing_list: TrackedMetric = []
+    p10_error_list: TrackedMetric = []
+    p01_error_list: TrackedMetric = []
 
     EXCLUDE_GATES = {"delay", "reset", "barrier", "measure"}
 
@@ -75,10 +121,10 @@ def extract_backend_metrics(
                 # Use dedicated Qiskit methods for T1/T2 (legacy/compatibility)
 
                 qubit_data[q_idx]["t1"] = properties.t1(q_idx)
-                t1_relaxation_list.append(properties.t1(q_idx))
+                t1_relaxation_list.append((properties.t1(q_idx), q_idx))
 
                 qubit_data[q_idx]["t2"] = properties.t2(q_idx)
-                t2_dephasing_list.append(properties.t2(q_idx))
+                t2_dephasing_list.append((properties.t2(q_idx), q_idx))
 
             except Exception:
                 # Catch exceptions if any specific property method fails
@@ -91,7 +137,7 @@ def extract_backend_metrics(
                 readout_err = properties.readout_error(q_idx)
                 qubit_data[q_idx]["readout_error"] = readout_err
                 readout_errors_list.append(
-                    readout_err
+                    (readout_err, q_idx)
                 )  # Collect for overall average later
 
                 # Readout Duration (readout_length)
@@ -100,11 +146,11 @@ def extract_backend_metrics(
                 # Detailed readout probabilities (P(0|1) and P(1|0))
                 p10_error = properties.qubit_property(q_idx, "prob_meas1_prep0")[0]
                 qubit_data[q_idx]["p10"] = p10_error
-                p10_error_list.append(p10_error)
+                p10_error_list.append((p10_error, q_idx))
 
                 p01_error = properties.qubit_property(q_idx, "prob_meas0_prep1")[0]
                 qubit_data[q_idx]["p01"] = p01_error
-                p01_error_list.append(p01_error)
+                p01_error_list.append((p01_error, q_idx))
 
             except Exception:
                 # Catch exceptions if any specific readout property fails
@@ -141,9 +187,9 @@ def extract_backend_metrics(
                         key_err = f"{gate_name}_error"
                         key_dur = f"{gate_name}_duration"
                         qubit_data[q_idx][key_err] = inst_props.error
-                        one_q_errors_list.append(inst_props.error)
+                        one_q_errors_list.append((inst_props.error, q_idx))
                         qubit_data[q_idx][key_dur] = inst_props.duration
-                        one_q_duration_list.append(inst_props.duration)
+                        one_q_duration_list.append((inst_props.duration, q_idx))
 
     results["qubit_properties"] = qubit_data
 
@@ -177,12 +223,14 @@ def extract_backend_metrics(
                                 key_err = f"{gate_name}_error"
                                 link_data[canonical_link][key_err] = inst_props.error
                                 two_q_errors_list.append(
-                                    inst_props.error
+                                    (inst_props.error, canonical_link)
                                 )  # Collect for average
                             if inst_props.duration is not None:
                                 key_dur = f"{gate_name}_duration"
                                 link_data[canonical_link][key_dur] = inst_props.duration
-                                two_q_duration_list.append(inst_props.duration)
+                                two_q_duration_list.append(
+                                    (inst_props.duration, canonical_link)
+                                )
 
     results["link_properties"] = link_data
 
@@ -190,28 +238,50 @@ def extract_backend_metrics(
     # D. AGGREGATE METRICS (Averages for Noise Sensitivity)
     # ------------------------------------------------------------
 
-    results["avg_readout_error"] = (
-        float(np.mean(readout_errors_list)) if readout_errors_list else 0.0
+    results["avg_readout_error"] = get_average_metric(readout_errors_list)
+    results["avg_1q_error"] = get_average_metric(one_q_errors_list)
+    results["avg_2q_error"] = get_average_metric(two_q_errors_list)
+    results["avg_1q_duration"] = get_average_metric(one_q_duration_list)
+    results["avg_2q_duration"] = get_average_metric(two_q_duration_list)
+    results["avg_t1_time"] = get_average_metric(t1_relaxation_list)
+    results["avg_t2_time"] = get_average_metric(t2_dephasing_list)
+    results["avg_p10_error"] = get_average_metric(p10_error_list)
+    results["avg_p01_error"] = get_average_metric(p01_error_list)
+
+    # ------------------------------------------------------------
+    # E. METRICS - Worst case (Worst Case for Noise Sensitivity)
+    # ------------------------------------------------------------
+
+    results["max_readout_error"], results["max_readout_qubit"] = get_worst_metric(
+        readout_errors_list, find_max=True
     )
-    results["avg_1q_error"] = (
-        float(np.mean(one_q_errors_list)) if one_q_errors_list else 0.0
+    results["max_1q_error"], results["max_1q_qubit"] = get_worst_metric(
+        one_q_errors_list, find_max=True
     )
-    results["avg_2q_error"] = (
-        float(np.mean(two_q_errors_list)) if two_q_errors_list else 0.0
+    results["max_2q_error"], results["max_2q_link"] = get_worst_metric(
+        two_q_errors_list, find_max=True
     )
-    results["avg_1q_duration"] = (
-        float(np.mean(one_q_duration_list)) if one_q_duration_list else 0.0
+    results["max_p10_error"], results["max_p10_qubit"] = get_worst_metric(
+        p10_error_list, find_max=True
     )
-    results["avg_2q_duration"] = (
-        float(np.mean(two_q_duration_list)) if two_q_duration_list else 0.0
+    results["max_p01_error"], results["max_p01_qubit"] = get_worst_metric(
+        p01_error_list, find_max=True
     )
-    results["avg_t1_time"] = (
-        float(np.mean(t1_relaxation_list)) if t1_relaxation_list else 0.0
+
+    # Durations (MAX duration)
+    results["max_1q_duration"], results["max_1q_duration_qubit"] = get_worst_metric(
+        one_q_duration_list, find_max=True
     )
-    results["avg_t2_time"] = (
-        float(np.mean(t2_dephasing_list)) if t2_dephasing_list else 0.0
+    results["max_2q_duration"], results["max_2q_duration_link"] = get_worst_metric(
+        two_q_duration_list, find_max=True
     )
-    results["avg_p10_error"] = float(np.mean(p10_error_list)) if p10_error_list else 0.0
-    results["avg_p01_error"] = float(np.mean(p01_error_list)) if p01_error_list else 0.0
+
+    # Coherence Times (MIN time)
+    results["min_t1_time"], results["min_t1_qubit"] = get_worst_metric(
+        t1_relaxation_list, find_max=False
+    )
+    results["min_t2_time"], results["min_t2_qubit"] = get_worst_metric(
+        t2_dephasing_list, find_max=False
+    )
 
     return results
