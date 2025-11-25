@@ -103,6 +103,7 @@ def extract_backend_metrics(
     # ------------------------------------------------------------
     qubit_data: Dict[int, Dict[str, float]] = {}
     readout_errors_list: TrackedMetric = []
+    readout_duration_list: TrackedMetric = []
     one_q_errors_list: TrackedMetric = []
     one_q_duration_list: TrackedMetric = []
     t1_relaxation_list: TrackedMetric = []
@@ -141,7 +142,9 @@ def extract_backend_metrics(
                 )  # Collect for overall average later
 
                 # Readout Duration (readout_length)
-                qubit_data[q_idx]["readout_length"] = properties.readout_length(q_idx)
+                readout_dur = properties.readout_length(q_idx)
+                qubit_data[q_idx]["readout_length"] = readout_dur
+                readout_duration_list.append((readout_dur, q_idx))
 
                 # Detailed readout probabilities (P(0|1) and P(1|0))
                 p10_error = properties.qubit_property(q_idx, "prob_meas1_prep0")[0]
@@ -159,7 +162,9 @@ def extract_backend_metrics(
         # --- Single-Qubit Gate Errors (e.g., U, SX, RZ) ---
         if target:
 
-            used_gates_on_q_idx = set()
+            # used_gates_on_q_idx = set()
+            gate_counts_on_q_idx = {}
+            gate_counts_per_link = {}
 
             for instruction in transpiled_circuit.data:
                 qargs = instruction.qubits
@@ -171,10 +176,25 @@ def extract_backend_metrics(
                     q_index_used = transpiled_circuit.qubits.index(qargs[0])
 
                     if q_index_used == q_idx:
-                        used_gates_on_q_idx.add(op_name)
+                        # used_gates_on_q_idx.add(op_name)
+                        gate_counts_on_q_idx[op_name] = (
+                            gate_counts_on_q_idx.get(op_name, 0) + 1
+                        )
+
+                if len(qargs) == 2 and op_name not in EXCLUDE_GATES:
+                    q0 = transpiled_circuit.qubits.index(qargs[0])
+                    q1 = transpiled_circuit.qubits.index(qargs[1])
+                    canonical_link = tuple(sorted([q0, q1]))
+
+                    if canonical_link not in gate_counts_per_link:
+                        gate_counts_per_link[canonical_link] = {}
+                    gate_counts_per_link[canonical_link][op_name] = (
+                        gate_counts_per_link[canonical_link].get(op_name, 0) + 1
+                    )
 
             # We assume single-qubit gates are those with len=1 in the target
-            for gate_name in used_gates_on_q_idx:
+            # for gate_name in used_gates_on_q_idx:
+            for gate_name in gate_counts_on_q_idx:
                 gate_props = target.get(gate_name, {})
 
                 # Check for single-qubit definitions
@@ -186,10 +206,12 @@ def extract_backend_metrics(
                         # Store error and duration for all relevant 1Q gates
                         key_err = f"{gate_name}_error"
                         key_dur = f"{gate_name}_duration"
+                        key_cnt = f"{gate_name}_cnt"
                         qubit_data[q_idx][key_err] = inst_props.error
                         one_q_errors_list.append((inst_props.error, q_idx))
                         qubit_data[q_idx][key_dur] = inst_props.duration
                         one_q_duration_list.append((inst_props.duration, q_idx))
+                        qubit_data[q_idx][key_cnt] = gate_counts_on_q_idx[gate_name]
 
     results["qubit_properties"] = qubit_data
 
@@ -221,10 +243,19 @@ def extract_backend_metrics(
 
                             if inst_props.error is not None:
                                 key_err = f"{gate_name}_error"
+                                key_cnt = f"{gate_name}_cnt"
                                 link_data[canonical_link][key_err] = inst_props.error
                                 two_q_errors_list.append(
                                     (inst_props.error, canonical_link)
                                 )  # Collect for average
+                                if (
+                                    canonical_link in gate_counts_per_link
+                                    and gate_name
+                                    in gate_counts_per_link[canonical_link]
+                                ):
+                                    link_data[canonical_link][key_cnt] = (
+                                        gate_counts_per_link[canonical_link][gate_name]
+                                    )
                             if inst_props.duration is not None:
                                 key_dur = f"{gate_name}_duration"
                                 link_data[canonical_link][key_dur] = inst_props.duration
@@ -239,6 +270,7 @@ def extract_backend_metrics(
     # ------------------------------------------------------------
 
     results["avg_readout_error"] = get_average_metric(readout_errors_list)
+    results["avg_readout_duration"] = get_average_metric(readout_duration_list)
     results["avg_1q_error"] = get_average_metric(one_q_errors_list)
     results["avg_2q_error"] = get_average_metric(two_q_errors_list)
     results["avg_1q_duration"] = get_average_metric(one_q_duration_list)
@@ -254,6 +286,9 @@ def extract_backend_metrics(
 
     results["max_readout_error"], results["max_readout_qubit"] = get_worst_metric(
         readout_errors_list, find_max=True
+    )
+    results["max_readout_duration"], results["max_readout_qubit"] = get_worst_metric(
+        readout_duration_list, find_max=True
     )
     results["max_1q_error"], results["max_1q_qubit"] = get_worst_metric(
         one_q_errors_list, find_max=True

@@ -2,18 +2,21 @@
 
 from qiskit_ibm_runtime import EstimatorOptions
 from qiskit import QuantumCircuit
+from qiskit.transpiler.passes import ALAPScheduleAnalysis
 from adaptive_error_mitigation import config
-from adaptive_error_mitigation.utils import ANSI, colorize
+from adaptive_error_mitigation.utils import ANSI, colorize, schedule_circuit_if_needed
 from typing import List, Union, Tuple
 import numpy as np
 
 # Import the backend metrics extractor (assuming this path is correct)
 from adaptive_error_mitigation.analytics import (
     extract_backend_metrics,
+    analyze_qubit_idling,
 )
 
 # Import all strategy functions
 from .strategies import get_mem_options
+from .strategies import get_dd_options
 
 # from .strategies.dd_strategy import get_dd_options # Example for future use
 # from .strategies.zne_strategy import get_zne_options # Example for future use
@@ -98,6 +101,37 @@ def select_mitigation_options(
     if combined_options["resilience"].get("measure_mitigation", False):
         combined_options["resilience_level"] = 1
 
+    # ==================================================================
+    # DYNAMIC DECOUPLING (DD) HEURISTIC
+    # ==================================================================
+
+    # Step 1: Ensure circuit is scheduled
+    isa_qc_scheduled = schedule_circuit_if_needed(isa_qc, backend)
+
+    # Step 2: Analyze qubit idling to get DD metrics
+    idling_analysis = analyze_qubit_idling(isa_qc_scheduled, backend)
+    max_dd_qubit = idling_analysis["max_ratio_qubit"]["qubit_idx"]
+    max_decoher_err_prob = idling_analysis["max_ratio_qubit"]["decoher_err_prob"]
+
+    # Step 3: Get DD options and potentially preprocessed circuit
+    dd_result = get_dd_options(
+        max_decoher_err_prob=max_decoher_err_prob,
+        max_dd_qubit=max_dd_qubit,
+        backend=backend,
+        isa_qc=isa_qc_scheduled,
+    )
+
+    # Step 4: Extract results
+    dd_options = dd_result["dd_options"]
+    dd_circuit = dd_result[
+        "dd_circuit"
+    ]  # None if DD not applied, otherwise DD-processed circuit
+
+    combined_options.update(dd_options)
+
+    # Step 5: Use dd_circuit for execution if DD was applied, otherwise use original
+    final_circuit = dd_circuit if dd_circuit is not None else isa_qc_scheduled
+
     # --- Add other fragments here (e.g., DD, ZNE) as they are implemented ---
     # dd_fragment = get_dd_options(circuit_depth)
     # combined_options["dynamical_decoupling"] = dd_fragment["dynamical_decoupling"]
@@ -106,7 +140,7 @@ def select_mitigation_options(
     final_options = EstimatorOptions(**combined_options)
     print("\nFinal Estimator Options:")
     # Print the dictionary representation for clarity
-    print(vars(final_options))
+    print(vars(final_options.to_dict()))
 
     # 3. Finalize and Return EstimatorOptions
-    return final_options
+    return {"final_options": final_options, "final_circuit": final_circuit}

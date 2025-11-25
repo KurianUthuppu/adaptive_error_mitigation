@@ -42,9 +42,13 @@ def run(pubs: List[PubType], backend, shots: int = None, **kwargs):
 
     # 2. Determine Adaptive Estimator Options (Constraint 2)
     print("--- Initiating Adaptive Error Mitigation and Suppression Framework ---")
-    estimator_options = select_mitigation_options(
+    mitigation_result = select_mitigation_options(
         isa_qc, backend, shots
     )  # Updated signature
+
+    # Extract final options and circuit from the result
+    estimator_options = mitigation_result["final_options"]
+    final_circuit = mitigation_result["final_circuit"]
     print(
         "\n--- Optimal Error Mitigation & Suppression Techniques applied in Estimator Options ---\n"
     )
@@ -54,6 +58,6 @@ def run(pubs: List[PubType], backend, shots: int = None, **kwargs):
     estimator = Estimator(mode=backend, options=estimator_options, **kwargs)
 
     # Run the job with only the required single pub (Constraint 3)
-    job = estimator.run([(isa_qc, isa_observable)])
+    job = estimator.run([(final_circuit, isa_observable)])
 
     return job

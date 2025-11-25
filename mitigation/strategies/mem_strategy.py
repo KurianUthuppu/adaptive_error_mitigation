@@ -69,7 +69,7 @@ def get_mem_options(
             f"{ANSI.BOLD}---> ACTION TAKEN:{ANSI.RESET} ENABLED {action_mitigation}\n"
             f"     | **Derived Parameters:** shots_per_randomization set to {shots_per_randomization} {calc_log}"
         )
-        enable_measure = False
+        enable_measure = True
         resilience_fragment = {
             "resilience": {
                 "measure_mitigation": True,
