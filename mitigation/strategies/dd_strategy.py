@@ -5,7 +5,7 @@ from adaptive_error_mitigation import config
 from adaptive_error_mitigation.utils import ANSI, colorize
 
 from qiskit.transpiler import PassManager
-from qiskit.transpiler.passes import PadDynamicalDecoupling
+from qiskit.transpiler.passes import PadDynamicalDecoupling, ALAPScheduleAnalysis
 from qiskit.circuit import QuantumCircuit
 from qiskit.circuit.library import XGate
 
@@ -25,9 +25,8 @@ def dynamical_decoupling_preprocess(
     """
     dd_pm = PassManager(
         [
-            PadDynamicalDecoupling(
-                durations=backend.instruction_durations, dd_sequence=dd_sequence
-            ),
+            ALAPScheduleAnalysis(target=backend.target),
+            PadDynamicalDecoupling(target=backend.target, dd_sequence=dd_sequence),
         ]
     )
     return dd_pm.run(isa_qc)
@@ -59,11 +58,13 @@ def get_dd_options(
     DD_ERROR_THRESHOLD = config.DD_ERROR_THRESHOLD
     DD_SEQUENCE = [XGate(), XGate()]
 
-    enable_dd = False
     dd_circuit = None
 
     # Default DD settings (disabled)
     dd_options = {"dynamical_decoupling": {"enable": False}}
+
+    # Preserve original layout before DD pass
+    original_layout = isa_qc._layout
 
     if max_decoher_err_prob >= DD_ERROR_THRESHOLD:
         # Apply ANSI coloring for highlighting and clarity
@@ -81,10 +82,14 @@ def get_dd_options(
             f"     | Metric: MAX DECOHERENCE ERROR PROBABILITY - {metric_val} (on Qubit {qubit_idx})\n"
             f"     | Threshold Set: {threshold_val} (DD_ERROR_THRESHOLD (config.py))\n"
             f"{ANSI.BOLD}---> ACTION TAKEN:{ANSI.RESET} ENABLED {action_mitigation}\n"
+            f"     | Sequence Applied: {dd_seq_str}"
         )
 
         # Apply DD preprocessing to the circuit
         dd_circuit = dynamical_decoupling_preprocess(isa_qc, backend, DD_SEQUENCE)
+
+        # Restore layout after DD pass
+        dd_circuit._layout = original_layout
 
     # Return DD options and optionally the preprocessed circuit
     return {

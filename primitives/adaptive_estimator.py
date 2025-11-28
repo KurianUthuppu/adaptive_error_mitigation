@@ -53,6 +53,10 @@ def run(pubs: List[PubType], backend, shots: int = None, **kwargs):
         "\n--- Optimal Error Mitigation & Suppression Techniques applied in Estimator Options ---\n"
     )
 
+    print(
+        f"--- Submitting job to {backend.name} with configured EstimatorOptions ---\n"
+    )
+
     # 3. Initialize and Run the Estimator (Constraint 3 & **kwargs)
     # The **kwargs are passed through here
     estimator = Estimator(mode=backend, options=estimator_options, **kwargs)

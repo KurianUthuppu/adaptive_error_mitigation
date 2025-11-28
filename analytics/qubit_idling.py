@@ -4,6 +4,7 @@ from qiskit import QuantumCircuit
 from qiskit.converters import circuit_to_dag
 from qiskit.circuit import Delay, Qubit
 from .backend_characterization import extract_backend_metrics
+from adaptive_error_mitigation.utils import schedule_circuit_if_needed
 from typing import Dict, Any
 import numpy as np
 
@@ -41,43 +42,61 @@ def analyze_qubit_idling(
     except AttributeError:
         raise ValueError("Backend does not provide 'target.dt' resolution.")
 
-    backend_prop = extract_backend_metrics(isa_qc, backend)
+    # Ensure circuit is scheduled
+    isa_qc_scheduled = schedule_circuit_if_needed(isa_qc, backend)
+
+    backend_prop = extract_backend_metrics(isa_qc_scheduled, backend)
 
     # Extract T2 coherence times
     t2_map_sec = extract_t2_map_from_properties(backend_prop)
 
+    # Commenting below section since the delay instruction is included while running schedule_circuit_if_needed
     # Convert to DAG to analyze ops
-    dag = circuit_to_dag(isa_qc)
-    qubit_init_map = {q: False for q in isa_qc.qubits}
+    # dag = circuit_to_dag(isa_qc_scheduled)
+    # qubit_init_map = {q: False for q in isa_qc_scheduled.qubits}
+    # delay_accumulator = {}
+
+    # # Limit analysis to used qubits only
+    # try:
+    #     used_qubit_idxs = set(isa_qc_scheduled.layout.final_index_layout().keys())
+    # except:
+    #     used_qubit_idxs = set(
+    #         i
+    #         for i, q in enumerate(isa_qc_scheduled.qubits)
+    #         if any(q in inst[1] for inst in isa_qc_scheduled.data)
+    #     )
+
+    # for node in dag.op_nodes():
+    #     if len(node.qargs) != 1:
+    #         continue  # Skip multi-qubit ops
+
+    #     qubit = node.qargs[0]
+    #     qidx = isa_qc_scheduled.qubits.index(qubit)
+    #     if qidx not in used_qubit_idxs:
+    #         continue
+
+    #     if not isinstance(node.op, Delay):
+    #         qubit_init_map[qubit] = True
+    #         continue
+
+    #     if not qubit_init_map[qubit]:
+    #         continue  # Skip pre-init delays
+
+    #     delay_accumulator[qidx] = max(delay_accumulator.get(qidx, 0), node.op.duration)
+
+    # Accumulate delays per qubit directly from circuit data
     delay_accumulator = {}
+    used_qubit_idxs = set()
 
-    # Limit analysis to used qubits only
-    try:
-        used_qubit_idxs = set(isa_qc.layout.final_index_layout().keys())
-    except:
-        used_qubit_idxs = set(
-            i
-            for i, q in enumerate(isa_qc.qubits)
-            if any(q in inst[1] for inst in isa_qc.data)
-        )
+    for inst in isa_qc_scheduled.data:
+        for q in inst.qubits:
+            qidx = isa_qc_scheduled.qubits.index(q)
+            used_qubit_idxs.add(qidx)
 
-    for node in dag.op_nodes():
-        if len(node.qargs) != 1:
-            continue  # Skip multi-qubit ops
-
-        qubit = node.qargs[0]
-        qidx = isa_qc.qubits.index(qubit)
-        if qidx not in used_qubit_idxs:
-            continue
-
-        if not isinstance(node.op, Delay):
-            qubit_init_map[qubit] = True
-            continue
-
-        if not qubit_init_map[qubit]:
-            continue  # Skip pre-init delays
-
-        delay_accumulator[qidx] = max(delay_accumulator.get(qidx, 0), node.op.duration)
+            if inst.operation.name == "delay":
+                delay_accumulator[qidx] = (
+                    delay_accumulator.get(qidx, 0) + inst.operation.duration
+                )
 
     # Prepare results
     result = {}

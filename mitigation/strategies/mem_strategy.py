@@ -66,7 +66,11 @@ def get_mem_options(
             f"\n{ANSI.BOLD}---> HEURISTIC TRIGGERED:{ANSI.RESET} Readout Error Threshold Exceeded\n"
             f"     | Metric: MAX READOUT ERROR - {metric_val} (on Qubit {qubit_idx})\n"
             f"     | Threshold Set: {threshold_val} (READOUT_ERROR_THRESHOLD (config.py))\n"
-            f"{ANSI.BOLD}---> ACTION TAKEN:{ANSI.RESET} ENABLED {action_mitigation}\n"
+            f"{ANSI.BOLD}---> ACTION TAKEN:{ANSI.RESET} ENABLED Measure Mitigation (TREX)\n"
+            f"     | Resilience Level: {colorize('1', ANSI.B_CYAN)}\n"
+            f"     | Measure Noise Learning (Randomizations): {NUM_RANDOMIZATIONS} (NUM_RANDOMIZATIONS (config.py))\n"
+            f"{ANSI.BOLD}---> ACTION TAKEN:{ANSI.RESET} ENABLED Measure Twirling\n"
+            f"     | Twirling: Measure=True / Gates=False\n"
             f"     | **Derived Parameters:** shots_per_randomization set to {shots_per_randomization} {calc_log}"
         )
         enable_measure = True
@@ -75,13 +79,18 @@ def get_mem_options(
                 "measure_mitigation": True,
                 "measure_noise_learning": {
                     "num_randomizations": NUM_RANDOMIZATIONS,
-                    "shots_per_randomization": shots_per_randomization,
+                    "shots_per_randomization": shots_value,
                 },
             }
         }
 
     # Always return a full twirling options dictionary fragment
     return {
-        "twirling": {"enable_gates": False, "enable_measure": enable_measure},
+        "twirling": {
+            "enable_gates": False,
+            "enable_measure": enable_measure,
+            "num_randomizations": NUM_RANDOMIZATIONS,
+            "shots_per_randomization": shots_per_randomization,
+        },
         "resilience_fragment": resilience_fragment,  # Temporary value to be merged later
     }

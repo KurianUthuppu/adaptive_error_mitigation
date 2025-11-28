@@ -4,7 +4,12 @@ from qiskit_ibm_runtime import EstimatorOptions
 from qiskit import QuantumCircuit
 from qiskit.transpiler.passes import ALAPScheduleAnalysis
 from adaptive_error_mitigation import config
-from adaptive_error_mitigation.utils import ANSI, colorize, schedule_circuit_if_needed
+from adaptive_error_mitigation.utils import (
+    ANSI,
+    colorize,
+    schedule_circuit_if_needed,
+    print_scheduled_status,
+)
 from typing import List, Union, Tuple
 import numpy as np
 
@@ -17,9 +22,7 @@ from adaptive_error_mitigation.analytics import (
 # Import all strategy functions
 from .strategies import get_mem_options
 from .strategies import get_dd_options
-
-# from .strategies.dd_strategy import get_dd_options # Example for future use
-# from .strategies.zne_strategy import get_zne_options # Example for future use
+from .strategies import get_zne_options
 
 
 def select_mitigation_options(
@@ -105,6 +108,7 @@ def select_mitigation_options(
     # DYNAMIC DECOUPLING (DD) HEURISTIC
     # ==================================================================
 
+    print_scheduled_status(isa_qc, backend)
     # Step 1: Ensure circuit is scheduled
     isa_qc_scheduled = schedule_circuit_if_needed(isa_qc, backend)
 
@@ -132,15 +136,54 @@ def select_mitigation_options(
     # Step 5: Use dd_circuit for execution if DD was applied, otherwise use original
     final_circuit = dd_circuit if dd_circuit is not None else isa_qc_scheduled
 
-    # --- Add other fragments here (e.g., DD, ZNE) as they are implemented ---
-    # dd_fragment = get_dd_options(circuit_depth)
-    # combined_options["dynamical_decoupling"] = dd_fragment["dynamical_decoupling"]
-    # combined_options["resilience_level"] = max(combined_options["resilience_level"], dd_fragment.pop("resilience_level_fragment"))
+    # ==================================================================
+    # ZERO NOISE EXTRAPOLATION (ZNE) HEURISTIC
+    # ==================================================================
+
+    # Step 1: Get ZNE options based on h_zne score
+    zne_result = get_zne_options(final_circuit, backend, shots)
+
+    # Step 2: Extract ZNE results
+    zne_options = zne_result["zne_options"]
+
+    # Step 3: Update resilience level (take max to not downgrade)
+    current_resilience = combined_options.get("resilience_level", 0)
+    combined_options["resilience_level"] = max(
+        current_resilience, zne_options["resilience_level"]
+    )
+
+    # Step 4: Update resilience options with ZNE settings
+    if "resilience" not in combined_options:
+        combined_options["resilience"] = {}
+
+    combined_options["resilience"]["zne_mitigation"] = zne_options["zne_mitigation"]
+    if zne_options["zne_mitigation"]:
+        combined_options["resilience"]["zne"] = zne_options["zne"]
+
+    # Step 5: Update twirling options
+    if "twirling" not in combined_options:
+        combined_options["twirling"] = {}
+
+    combined_options["twirling"]["enable_gates"] = zne_options["twirling"][
+        "enable_gates"
+    ]
+    if zne_options["twirling"]["num_randomizations"]:
+        combined_options["twirling"]["num_randomizations"] = zne_options["twirling"][
+            "num_randomizations"
+        ]
+    if zne_options["twirling"]["shots_per_randomization"]:
+        combined_options["twirling"]["shots_per_randomization"] = zne_options[
+            "twirling"
+        ]["shots_per_randomization"]
+
+    # ==================================================================
+    # FINALIZE OPTIONS
+    # ==================================================================
 
     final_options = EstimatorOptions(**combined_options)
     print("\nFinal Estimator Options:")
     # Print the dictionary representation for clarity
-    print(vars(final_options.to_dict()))
+    print(vars(final_options))
 
-    # 3. Finalize and Return EstimatorOptions
+    # Finalize and Return EstimatorOptions
     return {"final_options": final_options, "final_circuit": final_circuit}
