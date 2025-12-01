@@ -44,7 +44,8 @@ ZNE_MIN_THRESHOLD = 0.25
 ZNE_MAX_THRESHOLD = 1.5
 ZNE_NOISE_FACTORS = (1, 3, 5)
 ZNE_EXTRAPOLATOR = "exponential"
-ZNE_AMPLIFIER = "gate_folding"
+ZNE_AMPLIFIER = "gate_folding"  # Options: 'gate_folding', 'gate_folding_front', 'gate_folding_back', 'pea'
+# For requisite options refer - https://quantum.cloud.ibm.com/docs/en/api/qiskit-ibm-runtime/options-zne-options
 
 # Twirling Configuration
 TWIRLING_NUM_RANDOMIZATIONS = 32

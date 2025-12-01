@@ -87,16 +87,26 @@ def analyze_qubit_idling(
     # Accumulate delays per qubit directly from circuit data
     delay_accumulator = {}
     used_qubit_idxs = set()
+    qubits_initialized = set()
 
     for inst in isa_qc_scheduled.data:
         for q in inst.qubits:
             qidx = isa_qc_scheduled.qubits.index(q)
             used_qubit_idxs.add(qidx)
 
-            if inst.operation.name == "delay":
-                delay_accumulator[qidx] = (
-                    delay_accumulator.get(qidx, 0) + inst.operation.duration
-                )
+            # 1. If it's NOT a delay (e.g., a Gate or Measure), mark qubit as active
+            if inst.operation.name != "delay":
+                qubits_initialized.add(qidx)
+                continue  # Move to the next qubit/instruction
+
+            # 2. If we reach here, it IS a delay.
+            # Check if the qubit has been initialized (has it seen a gate yet?)
+            if qidx not in qubits_initialized:
+                continue  # Skip this delay (it is just initial padding)
+
+            # 3. Process the delay (only if it happens *after* initialization)
+            current_max = delay_accumulator.get(qidx, 0)
+            delay_accumulator[qidx] = max(current_max, inst.operation.duration)
 
     # Prepare results
     result = {}
@@ -122,6 +132,11 @@ def analyze_qubit_idling(
             # "ratio": round(ratio, 6),
             "decoher_err_prob": float(round(decoher_err_prob, 6)),
         }
+
+        # Commenting the log for debugging purpose
+        # print(
+        #     f"Qubit {qidx}: T2 = {round(t2_dt,2)} dt, Idle = {delay_dt} dt, Decoherence Error Prob = {round(decoher_err_prob,6)}"
+        # )
 
         # Accumulate data for overall average calculation
         t2_dt_list.append(t2_dt)
