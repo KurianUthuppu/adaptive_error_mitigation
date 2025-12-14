@@ -17,12 +17,22 @@ import numpy as np
 from adaptive_error_mitigation.analytics import (
     extract_backend_metrics,
     analyze_qubit_idling,
+    extract_basic_features,
 )
 
 # Import all strategy functions
 from .strategies import get_mem_options
 from .strategies import get_dd_options
 from .strategies import get_zne_options
+
+
+# Helper function for circuit density
+def _get_crkt_density(isa_qc: QuantumCircuit):
+    m = extract_basic_features(isa_qc)
+    # Avoid division by zero
+    if m["qubits_used"] * m["depth"] == 0:
+        return 0
+    return (m["num_1q_gates"] + 2 * m["num_2q_gates"]) / (m["qubits_used"] * m["depth"])
 
 
 def select_mitigation_options(
@@ -112,15 +122,12 @@ def select_mitigation_options(
     # Step 1: Ensure circuit is scheduled
     isa_qc_scheduled = schedule_circuit_if_needed(isa_qc, backend)
 
-    # Step 2: Analyze qubit idling to get DD metrics
-    idling_analysis = analyze_qubit_idling(isa_qc_scheduled, backend)
-    max_dd_qubit = idling_analysis["max_ratio_qubit"]["qubit_idx"]
-    max_decoher_err_prob = idling_analysis["max_ratio_qubit"]["decoher_err_prob"]
+    # Step 2: Get circuit density
+    crk_density = _get_crkt_density(isa_qc)
 
     # Step 3: Get DD options and potentially preprocessed circuit
     dd_result = get_dd_options(
-        max_decoher_err_prob=max_decoher_err_prob,
-        max_dd_qubit=max_dd_qubit,
+        crk_density,
         backend=backend,
         isa_qc=isa_qc_scheduled,
     )

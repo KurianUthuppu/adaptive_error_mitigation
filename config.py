@@ -31,9 +31,9 @@ shots_per_randomization (shots / NUM_RANDOMIZATIONS).
 # ------------------------------------------------------------------------------
 # 2. Dynamic Decoupling (DD)
 # ------------------------------------------------------------------------------
+DD_MIN_CD_THRESHOLD = 0.07
+DD_MAX_CD_THRESHOLD = 0.25
 
-# DD_ERROR_THRESHOLD: float = 0.001
-DD_ERROR_THRESHOLD: float = 1
 """
 Max decoherence error probability (0.0 to 1.0) required to trigger DD.
 If max decoherence error >= this value, DD is applied as a preprocessing step.

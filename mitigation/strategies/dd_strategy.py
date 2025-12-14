@@ -10,7 +10,7 @@ from qiskit.circuit import QuantumCircuit
 from qiskit.circuit.library import XGate
 
 
-def dynamical_decoupling_preprocess(
+def _dynamical_decoupling_preprocess(
     isa_qc: QuantumCircuit, backend, dd_sequence
 ) -> QuantumCircuit:
     """Apply dynamical decoupling to the input circuit.
@@ -33,8 +33,7 @@ def dynamical_decoupling_preprocess(
 
 
 def get_dd_options(
-    max_decoher_err_prob: float,
-    max_dd_qubit: int,
+    crk_density: float,
     backend,
     isa_qc: QuantumCircuit,
 ) -> dict:
@@ -55,7 +54,8 @@ def get_dd_options(
     """
 
     # Use the threshold and DD sequence from the imported config file
-    DD_ERROR_THRESHOLD = config.DD_ERROR_THRESHOLD
+    DD_MIN_CD_THRESHOLD = config.DD_MIN_CD_THRESHOLD
+    DD_MAX_CD_THRESHOLD = config.DD_MAX_CD_THRESHOLD
     DD_SEQUENCE = [XGate(), XGate()]
 
     dd_circuit = None
@@ -66,11 +66,11 @@ def get_dd_options(
     # Preserve original layout before DD pass
     original_layout = isa_qc._layout
 
-    if max_decoher_err_prob >= DD_ERROR_THRESHOLD:
+    if DD_MIN_CD_THRESHOLD <= crk_density <= DD_MAX_CD_THRESHOLD:
         # Apply ANSI coloring for highlighting and clarity
-        metric_val = colorize(f"{max_decoher_err_prob:.4f}", ANSI.B_YELLOW)
-        qubit_idx = colorize(str(max_dd_qubit), ANSI.B_YELLOW)
-        threshold_val = colorize(f"{DD_ERROR_THRESHOLD:.4f}", ANSI.B_CYAN)
+        metric_val = colorize(f"{crk_density:.4f}", ANSI.B_YELLOW)
+        min_val = colorize(f"{DD_MIN_CD_THRESHOLD:.4f}", ANSI.B_CYAN)
+        max_val = colorize(f"{DD_MAX_CD_THRESHOLD:.4f}", ANSI.B_CYAN)
 
         action_mitigation = colorize("Dynamic Decoupling (DD)", ANSI.B_GREEN)
 
@@ -78,15 +78,15 @@ def get_dd_options(
         dd_seq_str = colorize(f"{[gate.name for gate in DD_SEQUENCE]}", ANSI.CYAN)
 
         print(
-            f"\n{ANSI.BOLD}---> HEURISTIC TRIGGERED:{ANSI.RESET} Decoherence Error Threshold Exceeded\n"
-            f"     | Metric: MAX DECOHERENCE ERROR PROBABILITY - {metric_val} (on Qubit {qubit_idx})\n"
-            f"     | Threshold Set: {threshold_val} (DD_ERROR_THRESHOLD (config.py))\n"
+            f"\n{ANSI.BOLD}---> HEURISTIC TRIGGERED:{ANSI.RESET} Circuit density Within Range\n"
+            f"     | Metric: CIRCUIT DENSITY (CD) - {metric_val}\n"
+            f"     | Threshold Range: [{min_val}, {max_val}] (config.py)\n"
             f"{ANSI.BOLD}---> ACTION TAKEN:{ANSI.RESET} ENABLED {action_mitigation}\n"
             f"     | Sequence Applied: {dd_seq_str}"
         )
 
         # Apply DD preprocessing to the circuit
-        dd_circuit = dynamical_decoupling_preprocess(isa_qc, backend, DD_SEQUENCE)
+        dd_circuit = _dynamical_decoupling_preprocess(isa_qc, backend, DD_SEQUENCE)
 
         # Restore layout after DD pass
         dd_circuit._layout = original_layout
