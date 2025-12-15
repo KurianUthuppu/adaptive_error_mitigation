@@ -40,7 +40,7 @@ If max decoherence error >= this value, DD is applied as a preprocessing step.
 """
 
 # ZNE (Zero Noise Extrapolation) Configuration
-ZNE_MIN_THRESHOLD = 0.25
+ZNE_MIN_THRESHOLD = 0.2
 ZNE_MAX_THRESHOLD = 1.5
 ZNE_NOISE_FACTORS = (1, 3, 5)
 ZNE_EXTRAPOLATOR = "exponential"
