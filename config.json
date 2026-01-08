@@ -1,0 +1,26 @@
+{
+    "ibm_fez": {
+        "DD_ERROR_THRESHOLD": 0.15473,
+        "ZNE_MIN_THRESHOLD" : 0.25,
+        "ZNE_MAX_THRESHOLD" : 1.5,
+        "ZNE_NOISE_FACTORS" : [1, 3, 5],
+        "ZNE_EXTRAPOLATOR" : "exponential",
+        "ZNE_AMPLIFIER" : "gate_folding"
+    },
+    "ibm_torino": {
+        "DD_ERROR_THRESHOLD": 0.107031,
+        "ZNE_MIN_THRESHOLD" : 0.25,
+        "ZNE_MAX_THRESHOLD" : 1.5,
+        "ZNE_NOISE_FACTORS" : [1, 3, 5],
+        "ZNE_EXTRAPOLATOR" : "exponential",
+        "ZNE_AMPLIFIER" : "gate_folding"
+    },
+    "ibm_marrakesh": {
+        "DD_ERROR_THRESHOLD": 0.015019,
+        "ZNE_MIN_THRESHOLD" : 0.25,
+        "ZNE_MAX_THRESHOLD" : 1.5,
+        "ZNE_NOISE_FACTORS" : [1, 3, 5],
+        "ZNE_EXTRAPOLATOR" : "exponential",
+        "ZNE_AMPLIFIER" : "gate_folding"
+    }
+}
