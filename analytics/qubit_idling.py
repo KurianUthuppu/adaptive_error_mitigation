@@ -3,6 +3,8 @@
 from qiskit import QuantumCircuit
 from qiskit.converters import circuit_to_dag
 from qiskit.circuit import Delay, Qubit
+from .backend_characterization import extract_backend_metrics
+from adaptive_error_mitigation.utils import schedule_circuit_if_needed
 from typing import Dict, Any
 import numpy as np
 
@@ -21,13 +23,13 @@ def extract_t2_map_from_properties(
 
 
 def analyze_qubit_idling(
-    qc: QuantumCircuit, backend_prop: Dict[str, Any], backend
+    isa_qc: QuantumCircuit, backend
 ) -> Dict[int, Dict[str, float]]:
     """
     Returns qubit-wise T2 in dt, total post-init delay in dt, and delay/T2 ratio.
 
     Args:
-        qc: QuantumCircuit to analyze.
+        isa_qc: QuantumCircuit to analyze.
         backend_prop: Backend property dict (must include 'qubit_properties').
         backend: Qiskit backend instance (must support .target.dt).
 
@@ -40,39 +42,71 @@ def analyze_qubit_idling(
     except AttributeError:
         raise ValueError("Backend does not provide 'target.dt' resolution.")
 
+    # Ensure circuit is scheduled
+    isa_qc_scheduled = schedule_circuit_if_needed(isa_qc, backend)
+
+    backend_prop = extract_backend_metrics(isa_qc_scheduled, backend)
+
     # Extract T2 coherence times
     t2_map_sec = extract_t2_map_from_properties(backend_prop)
 
+    # Commenting below section since the delay instruction is included while running schedule_circuit_if_needed
     # Convert to DAG to analyze ops
-    dag = circuit_to_dag(qc)
-    qubit_init_map = {q: False for q in qc.qubits}
+    # dag = circuit_to_dag(isa_qc_scheduled)
+    # qubit_init_map = {q: False for q in isa_qc_scheduled.qubits}
+    # delay_accumulator = {}
+
+    # # Limit analysis to used qubits only
+    # try:
+    #     used_qubit_idxs = set(isa_qc_scheduled.layout.final_index_layout().keys())
+    # except:
+    #     used_qubit_idxs = set(
+    #         i
+    #         for i, q in enumerate(isa_qc_scheduled.qubits)
+    #         if any(q in inst[1] for inst in isa_qc_scheduled.data)
+    #     )
+
+    # for node in dag.op_nodes():
+    #     if len(node.qargs) != 1:
+    #         continue  # Skip multi-qubit ops
+
+    #     qubit = node.qargs[0]
+    #     qidx = isa_qc_scheduled.qubits.index(qubit)
+    #     if qidx not in used_qubit_idxs:
+    #         continue
+
+    #     if not isinstance(node.op, Delay):
+    #         qubit_init_map[qubit] = True
+    #         continue
+
+    #     if not qubit_init_map[qubit]:
+    #         continue  # Skip pre-init delays
+
+    #     delay_accumulator[qidx] = max(delay_accumulator.get(qidx, 0), node.op.duration)
+
+    # Accumulate delays per qubit directly from circuit data
     delay_accumulator = {}
+    used_qubit_idxs = set()
+    qubits_initialized = set()
 
-    # Limit analysis to used qubits only
-    try:
-        used_qubit_idxs = set(qc.layout.final_index_layout().keys())
-    except:
-        used_qubit_idxs = set(
-            i for i, q in enumerate(qc.qubits) if any(q in inst[1] for inst in qc.data)
-        )
+    for inst in isa_qc_scheduled.data:
+        for q in inst.qubits:
+            qidx = isa_qc_scheduled.qubits.index(q)
+            used_qubit_idxs.add(qidx)
 
-    for node in dag.op_nodes():
-        if len(node.qargs) != 1:
-            continue  # Skip multi-qubit ops
+            # 1. If it's NOT a delay (e.g., a Gate or Measure), mark qubit as active
+            if inst.operation.name != "delay":
+                qubits_initialized.add(qidx)
+                continue  # Move to the next qubit/instruction
 
-        qubit = node.qargs[0]
-        qidx = qc.qubits.index(qubit)
-        if qidx not in used_qubit_idxs:
-            continue
+            # 2. If we reach here, it IS a delay.
+            # Check if the qubit has been initialized (has it seen a gate yet?)
+            if qidx not in qubits_initialized:
+                continue  # Skip this delay (it is just initial padding)
 
-        if not isinstance(node.op, Delay):
-            qubit_init_map[qubit] = True
-            continue
-
-        if not qubit_init_map[qubit]:
-            continue  # Skip pre-init delays
-
-        delay_accumulator[qidx] = max(delay_accumulator.get(qidx, 0), node.op.duration)
+            # 3. Process the delay (only if it happens *after* initialization)
+            current_max = delay_accumulator.get(qidx, 0)
+            delay_accumulator[qidx] = max(current_max, inst.operation.duration)
 
     # Prepare results
     result = {}
@@ -94,10 +128,15 @@ def analyze_qubit_idling(
 
         result[qidx] = {
             "t2_dt": round(t2_dt, 2),
-            "max_delay_dt": delay_dt,
+            "idle_dt": delay_dt,
             # "ratio": round(ratio, 6),
             "decoher_err_prob": float(round(decoher_err_prob, 6)),
         }
+
+        # Commenting the log for debugging purpose
+        # print(
+        #     f"Qubit {qidx}: T2 = {round(t2_dt,2)} dt, Idle = {delay_dt} dt, Decoherence Error Prob = {round(decoher_err_prob,6)}"
+        # )
 
         # Accumulate data for overall average calculation
         t2_dt_list.append(t2_dt)
@@ -109,7 +148,7 @@ def analyze_qubit_idling(
             max_ratio_qubit_metrics = {
                 "qubit_idx": qidx,
                 "t2_dt": round(t2_dt, 2),
-                "max_delay_dt": delay_dt,
+                "idle_dt": delay_dt,
                 # "ratio": round(ratio, 6),
                 "decoher_err_prob": float(round(decoher_err_prob, 6)),
             }
@@ -117,7 +156,7 @@ def analyze_qubit_idling(
     if processed_qubit_count == 0:
         avg_metrics = {
             "t2_dt": 0.0,
-            "max_delay_dt": 0,
+            "idle_dt": 0,
             # "ratio": 0.0,
             "decoher_err_prob": 0.0,
         }
@@ -125,7 +164,7 @@ def analyze_qubit_idling(
         avg_metrics = {
             # Use sum() on the lists and divide by the count
             "t2_dt": round(sum(t2_dt_list) / processed_qubit_count, 2),
-            "max_delay_dt": int(
+            "idle_dt": int(
                 round(sum(delay_dt_list) / processed_qubit_count)
             ),  # Avg delay is often an integer unit
             # "ratio": round(sum(delay_dt_list) / sum(t2_dt_list), 6),
