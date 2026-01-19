@@ -65,9 +65,6 @@ def select_mitigation_options(
             f"    | Implied Default Precision (1/sqrt(shots)) set to {precision_val_colored}."
         )
 
-        # Add shots to combined_options for logging/completeness, even if Estimator doesn't accept it directly
-        combined_options["shots"] = shots
-
     else:
         default_shots_colored = colorize(str(config.DEFAULT_SHOTS), ANSI.CYAN)
         default_precision_colored = colorize(

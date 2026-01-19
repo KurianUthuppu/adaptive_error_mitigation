@@ -58,7 +58,7 @@ def get_zne_options(isa_qc: QuantumCircuit, backend, total_shots: int = None) ->
     ZNE_NOISE_FACTORS = config.ZNE_NOISE_FACTORS
     ZNE_EXTRAPOLATOR = config.ZNE_EXTRAPOLATOR
     ZNE_AMPLIFIER = config.ZNE_AMPLIFIER
-    TWIRLING_NUM_RANDOMIZATIONS = config.TWIRLING_NUM_RANDOMIZATIONS
+    NUM_RANDOMIZATIONS = config.NUM_RANDOMIZATIONS
 
     # Determine the actual shots value
     if total_shots is None:
@@ -69,7 +69,7 @@ def get_zne_options(isa_qc: QuantumCircuit, backend, total_shots: int = None) ->
         shots_source = "USER INPUT"
 
     # Calculate shots_per_randomization (Formula: ceil(total_shots / num_randomizations))
-    shots_per_randomization = math.ceil(shots_value / TWIRLING_NUM_RANDOMIZATIONS)
+    shots_per_randomization = math.ceil(shots_value / NUM_RANDOMIZATIONS)
 
     # Calculate h_zne and component metrics
     metrics = calculate_h_zne(isa_qc, backend)
@@ -107,7 +107,7 @@ def get_zne_options(isa_qc: QuantumCircuit, backend, total_shots: int = None) ->
 
         # Log the calculated parameters
         calc_log = colorize(
-            f"(Shots: {shots_value} ({shots_source}) / Randomizations: {TWIRLING_NUM_RANDOMIZATIONS} (NUM_RANDOMIZATIONS (config.py)))",
+            f"(Shots: {shots_value} ({shots_source}) / Randomizations: {NUM_RANDOMIZATIONS} (NUM_RANDOMIZATIONS (config.py)))",
             ANSI.CYAN,
         )
 
@@ -135,7 +135,7 @@ def get_zne_options(isa_qc: QuantumCircuit, backend, total_shots: int = None) ->
             },
             "twirling": {
                 "enable_gates": True,
-                "num_randomizations": TWIRLING_NUM_RANDOMIZATIONS,
+                "num_randomizations": NUM_RANDOMIZATIONS,
                 "shots_per_randomization": shots_per_randomization,
             },
         }
