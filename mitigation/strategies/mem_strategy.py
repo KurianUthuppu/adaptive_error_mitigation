@@ -92,5 +92,5 @@ def get_mem_options(
             "num_randomizations": NUM_RANDOMIZATIONS,
             "shots_per_randomization": shots_per_randomization,
         },
-        "resilience_fragment": resilience_fragment,  # Temporary value to be merged later
+        "resilience_fragment": resilience_fragment,
     }
