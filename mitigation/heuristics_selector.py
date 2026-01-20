@@ -16,7 +16,6 @@ import numpy as np
 # Import the backend metrics extractor (assuming this path is correct)
 from adaptive_error_mitigation.analytics import (
     extract_backend_metrics,
-    analyze_qubit_idling,
     extract_basic_features,
 )
 
