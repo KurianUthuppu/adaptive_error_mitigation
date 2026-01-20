@@ -4,6 +4,7 @@ from qiskit_ibm_runtime import Estimator
 from typing import List, Union, Tuple, TYPE_CHECKING
 from qiskit.circuit import QuantumCircuit
 from qiskit.quantum_info import SparsePauliOp
+from qiskit.circuit.controlflow import ControlFlowOp
 
 # Import the decision engine
 from adaptive_error_mitigation.mitigation import (
@@ -36,6 +37,24 @@ def run(pubs: List[PubType], backend, mode=None, shots: int = None, **kwargs):
     for i, (isa_qc, isa_observable) in enumerate(pubs):
 
         print(f"\n--- Processing Pub {i+1}/{len(pubs)} ---")
+
+        # --- DYNAMIC CIRCUIT CHECK ---
+        is_dynamic = any(
+            isinstance(inst.operation, ControlFlowOp) for inst in isa_qc.data
+        )
+
+        if is_dynamic:
+            print(
+                f"\n[!] SKIP: Pub {i+1} contains Dynamic Control Flow (if_test/loops)."
+            )
+            print(
+                "The Adaptive Estimator framework does not currently support dynamic circuits."
+            )
+            # Depending on your needs, you can 'continue' to skip or 'break' to stop everything.
+            batch_results.append(
+                {"job": None, "error": "Dynamic circuit not supported"}
+            )
+            continue
 
         # 2. Determine Adaptive Estimator Options (Constraint 2)
         print("--- Initiating Adaptive Error Mitigation and Suppression Framework ---")
