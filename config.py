@@ -17,8 +17,7 @@ DEFAULT_SHOTS: int = 4096
 
 READOUT_ERROR_THRESHOLD: float = 0.01
 """
-Max readout error (0.0 to 1.0) required to trigger MEM (e.g., TREX).
-If max readout error >= this value, MEM is enabled.
+If max readout error >= this value, TREX is enabled.
 """
 
 NUM_RANDOMIZATIONS: int = 32
@@ -35,13 +34,17 @@ DD_MIN_CD_THRESHOLD = 0.07
 DD_MAX_CD_THRESHOLD = 0.25
 
 """
-Max decoherence error probability (0.0 to 1.0) required to trigger DD.
-If max decoherence error >= this value, DD is applied as a preprocessing step.
+If circuit density is within this range, DD is applied as a preprocessing step.
 """
 
-# ZNE (Zero Noise Extrapolation) Configuration
+# ------------------------------------------------------------------------------
+# 2. ZNE (Zero Noise Extrapolation) Configuration
+# ------------------------------------------------------------------------------
 ZNE_MIN_THRESHOLD = 0.2
 ZNE_MAX_THRESHOLD = 1.5
+"""
+If zne_heuristic is within this range, DD is applied as a preprocessing step.
+"""
 ZNE_NOISE_FACTORS = (1, 3, 5)
 ZNE_EXTRAPOLATOR = "exponential"
 ZNE_AMPLIFIER = "gate_folding"  # Options: 'gate_folding', 'gate_folding_front', 'gate_folding_back', 'pea'
