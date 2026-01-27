@@ -111,13 +111,13 @@ est_options
 
 **Team Members:**
 
-- **Aashay Pandharpatte** – Knowledge Associate, CDAC Pune, India
-- **Kurian Uthuppu** – Senior Project Manager, Tecnotree Convergence Pvt Ltd., Bengaluru, India
-- **Shreyansh Agarwal** – Prefinal Year Physics Student, IIT Jodhpur, India
+- **[Aashay Pandharpatte](https://github.com/recursion2612)** – Knowledge Associate, CDAC Pune, India
+- **[Kurian Uthuppu](https://github.com/KurianUthuppu/)** – Senior Project Manager, Tecnotree Convergence Pvt Ltd., Bengaluru, India
+- **[Shreyansh Agarwal](https://github.com/Shreyansh9878)** – Prefinal Year Physics Student, IIT Jodhpur, India
 
 **Mentor:**
 
-- **Dikshant Dulal** – Founder & Director, ISAAQ, Singapore
+- **[Dikshant Dulal](https://github.com/DikshantDulal)** – Founder & Director, ISAAQ, Singapore
 
 **Powered by:**
 
