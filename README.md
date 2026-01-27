@@ -102,7 +102,7 @@ est_options
 
 ## 🙌 Acknowledgements
 
-**Program:** IBM Quantum Accelerator Program (QAMP) 2025
+**Program:** IBM Qiskit Advocate Mentorship Program (QAMP) 2025
 
 **QAMP 2025 Coordinators:**
 
