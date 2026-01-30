@@ -38,7 +38,7 @@ If circuit density is within this range, DD is applied as a preprocessing step.
 """
 
 # ------------------------------------------------------------------------------
-# 2. ZNE (Zero Noise Extrapolation) Configuration
+# 3. ZNE (Zero Noise Extrapolation) Configuration
 # ------------------------------------------------------------------------------
 ZNE_MIN_THRESHOLD = 0.2
 ZNE_MAX_THRESHOLD = 1.5

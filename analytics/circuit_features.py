@@ -15,7 +15,12 @@ def extract_basic_features(circuit: QuantumCircuit) -> dict:
 
     # --- Core Metrics (use Qiskit built-in methods) ---
     features["tot_qubits"] = circuit.num_qubits
-    features["qubits_used"] = len(circuit.layout.final_index_layout())
+    # Handle both transpiled and pre-transpiled circuits
+    if circuit.layout is not None and hasattr(circuit.layout, "final_index_layout"):
+        features["qubits_used"] = len(circuit.layout.final_index_layout())
+    else:
+        # For pre-transpiled circuits, count active qubits
+        features["qubits_used"] = circuit.num_qubits
     features["depth"] = circuit.depth()
     features["size"] = circuit.size()
 
