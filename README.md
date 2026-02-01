@@ -104,8 +104,7 @@ est_options
 
 For a detailed explanation of the design decisions, architecture, and adaptive strategy behind this framework, read the full blog:
 
-👉 **Beyond the Guesswork: Building an Adaptive Error Mitigation Framework for Quantum Circuits**  
-https://medium.com/@kurianuthuppu11/beyond-the-guesswork-building-an-adaptive-error-mitigation-framework-for-quantum-circuits-e67427866de6
+👉 [**Beyond the Guesswork: Building an Adaptive Error Mitigation Framework for Quantum Circuits**](https://medium.com/@kurianuthuppu11/beyond-the-guesswork-building-an-adaptive-error-mitigation-framework-for-quantum-circuits-e67427866de6)
 
 ---
 
