@@ -18,7 +18,7 @@ An **intelligent, circuit-aware framework** that eliminates guesswork in quantum
 adaptive_error_mitigation/
 │
 ├── analytics/           # Circuit and backend analysis modules
-├── deliverables/         # Final report and presentation (QAMP 2025)
+├── deliverables/        # Final report and presentation (QAMP 2025)
 ├── mitigation/          # Pluggable mitigation strategies and selection logic
 ├── primitives/          # Adaptive execution primitives
 ├── utils/               # Helper utilities (I/O, metrics, logging, formatting)
