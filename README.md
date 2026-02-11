@@ -18,6 +18,7 @@ An **intelligent, circuit-aware framework** that eliminates guesswork in quantum
 adaptive_error_mitigation/
 │
 ├── analytics/           # Circuit and backend analysis modules
+├── deliverables/         # Final report and presentation (QAMP 2025)
 ├── mitigation/          # Pluggable mitigation strategies and selection logic
 ├── primitives/          # Adaptive execution primitives
 ├── utils/               # Helper utilities (I/O, metrics, logging, formatting)
@@ -105,6 +106,13 @@ est_options
 For a detailed explanation of the design decisions, architecture, and adaptive strategy behind this framework, read the full blog:
 
 👉 [**Beyond the Guesswork: Building an Adaptive Error Mitigation Framework for Quantum Circuits**](https://medium.com/@kurianuthuppu11/beyond-the-guesswork-building-an-adaptive-error-mitigation-framework-for-quantum-circuits-e67427866de6)
+
+---
+
+## 📦 Deliverables
+
+- [Final Report (DOCX)](deliverables/FINAL_REPORT_Adaptive_Estimator_QAMP_2025.docx)
+- [Final Presentation (PPTX)](deliverables/Adaptive%20Error%20Mitigation%20Framework%20for%20Quantum%20Circuits.pptx)
 
 ---
 
